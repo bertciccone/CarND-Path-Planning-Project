@@ -244,7 +244,21 @@ int main() {
 
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-          	msgJson["next_x"] = next_x_vals;
+            // FROM GETTING STARTED
+            double dist_inc = 0.5;
+            for(int i = 0; i < 50; i++)
+            {
+              double next_s = car_s + (i + 1) * dist_inc;
+              int lane = 1; // count lanes starting from 0 at yellow line
+              int lane_width = 4;
+              //double next_d = (lane + 1) * lane_width - 0.5 * lane_width;
+              double next_d = 6;
+              vector<double> xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              next_x_vals.push_back(xy[0]);
+              next_y_vals.push_back(xy[1]);
+            }
+            // END OF GETTING STARTED
+            msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
           	auto msg = "42[\"control\","+ msgJson.dump()+"]";
