@@ -175,4 +175,5 @@ dependencies: \
   /Users/Bert/Projects/Udacity/CARND/term3/projects/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/QR/FullPivHouseholderQR.h \
   /Users/Bert/Projects/Udacity/CARND/term3/projects/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/QR/ColPivHouseholderQR.h \
   /Users/Bert/Projects/Udacity/CARND/term3/projects/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/QR/CompleteOrthogonalDecomposition.h \
-  /Users/Bert/Projects/Udacity/CARND/term3/projects/CarND-Path-Planning-Project/src/json.hpp
+  /Users/Bert/Projects/Udacity/CARND/term3/projects/CarND-Path-Planning-Project/src/json.hpp \
+  /Users/Bert/Projects/Udacity/CARND/term3/projects/CarND-Path-Planning-Project/src/spline.h
