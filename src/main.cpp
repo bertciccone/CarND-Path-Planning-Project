@@ -16,6 +16,7 @@ using namespace std;
 using json = nlohmann::json;
 
 int lane = 1; // count lanes starting from 0 at yellow line
+const int lanes_available = 3;
 const int d_lane_width = 4;
 const int d_lane_center = 0.5 * d_lane_width;
 double ref_vel = 0.0; // mph
@@ -264,43 +265,77 @@ int main() {
             car_s = end_path_s;
           }
 
-          // Utilize sensor fusion data about other cars
+          // Utilize sensor fusion data about other cars and make predictions
 
-          bool too_close = false;
+          bool too_close_front = false;
+          bool too_close_rear = false;
+          double extra_brake = 0;
+          double extra_accel = 0;
+          bool blocked_left = false;
+          bool blocked_right = false;
 
           for (int i = 0; i < sensor_fusion.size(); i++) {
             // Check for car in my lane
             float d = sensor_fusion[i][6];
-            if (in_lane(lane, d)) { // other car is in our lane
-              double vx = sensor_fusion[i][3];
-              double vy = sensor_fusion[i][4];
-              double check_speed = sqrt(vx * vx + vy * vy);
-              double check_car_s = sensor_fusion[i][5];
+            double vx = sensor_fusion[i][3];
+            double vy = sensor_fusion[i][4];
+            double check_speed = sqrt(vx * vx + vy * vy);
+            double check_car_s = sensor_fusion[i][5];
 
-              // We want to project car location into the future for our check
-              check_car_s += (double) prev_size * 0.02 * check_speed;
+            // We want to project the location of the other cars into the
+            // future for our check
+            check_car_s += (double) prev_size * 0.02 * check_speed;
 
-              if (check_car_s > car_s // car is ahead of us
-                  && check_car_s - car_s < 30) { // too close
-                // Either slow down or change lanes
-                too_close = true;
-                // ref_vel = 29.5;
-                if (lane == 1) { // Just change lanes without checkng
-                  lane = 0;
-                }
-                else if (lane == 0) {
-                  lane = 1;
-                }
-                // Instead, we could check that no car is within the gap
-                // to our left; if so, we could check on the right.
-                // This can also incorporate the finite state machine to
-                // decide which states are valid given our current state.
+            if (in_lane(lane, d)) {
+              // other car is in our lane
+              if (check_car_s > car_s // other car is ahead of us
+                  && check_car_s - car_s < 25) { // and in front safety zone
+                double s_diff = check_car_s - car_s;
+                too_close_front = true;
+                // vary braking according to distance to other vehicle
+                extra_brake = 0.224 * (1 - s_diff / 25);
+              }
+              if (check_car_s < car_s // other car is behind us
+                  && car_s - check_car_s < 25) { // and in rear safety zone
+                double s_diff = car_s - check_car_s;
+                too_close_rear = true;
+                // vary acceleration according to distance to other vehicle
+                extra_accel = 0.224 * (1 - s_diff / 25);
               }
             }
+            else if (lane > 0 && in_lane(lane - 1, d)) {
+              // other car is on our left
+              if (check_car_s > car_s - 25 // ahead of rear safety zone
+                  && check_car_s < car_s + 25) { // and behind front safety zone
+              blocked_left = true;
+              }
+            }
+            else if (lane < 2 && in_lane(lane + 1, d)) {
+              // other car is on our right
+              if (check_car_s > car_s - 25 // ahead of rear safety zone
+                  && check_car_s < car_s + 25) { // and behind front safety zone
+                blocked_right = true;
+              }
+            }
+            // Instead, we could check that no car is within the gap
+            // to our left; if so, we could check on the right.
+            // This can also incorporate the finite state machine to
+            // decide which states are valid given our current state.
           }
 
-          if (too_close) { // gradually slow down to avoid collision
-            ref_vel -= 0.224;
+          if (too_close_front) {
+            if (lane > 0 && !blocked_left) {
+              lane -= 1;
+            }
+            else if (lane < 2 && !blocked_right) {
+              lane += 1;
+            }
+            else {
+              ref_vel -= (0.224 + extra_brake);
+            }
+          }
+          else if (too_close_rear && ref_vel < 49.5) {
+            ref_vel += (0.224 + extra_accel);
           }
           else if (ref_vel < 49.5) { // gradually speed up to driving speed
             ref_vel += 0.224;
