@@ -16,10 +16,13 @@ using namespace std;
 using json = nlohmann::json;
 
 int lane = 1; // count lanes starting from 0 at yellow line
-const int lanes_available = 3;
+const int max_lane = 2;
 const int d_lane_width = 4;
 const int d_lane_center = 0.5 * d_lane_width;
 double ref_vel = 0.0; // mph
+double delta_vel = 0.336;
+const double target_vel = 49.5;
+const double s_safety_zone = 25;
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -45,7 +48,8 @@ double distance(double x1, double y1, double x2, double y2)
 {
 	return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 }
-int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y)
+int ClosestWaypoint(double x, double y, const vector<double> &maps_x,
+                    const vector<double> &maps_y)
 {
 
 	double closestLen = 100000; //large number
@@ -68,7 +72,8 @@ int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vect
 
 }
 
-int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
+int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x,
+                 const vector<double> &maps_y)
 {
 
 	int closestWaypoint = ClosestWaypoint(x,y,maps_x,maps_y);
@@ -94,7 +99,9 @@ int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x,
 }
 
 // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
-vector<double> getFrenet(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
+vector<double> getFrenet(double x, double y, double theta,
+                         const vector<double> &maps_x,
+                         const vector<double> &maps_y)
 {
 	int next_wp = NextWaypoint(x,y, theta, maps_x,maps_y);
 
@@ -143,7 +150,8 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 }
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
-vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+vector<double> getXY(double s, double d, const vector<double> &maps_s,
+                     const vector<double> &maps_x, const vector<double> &maps_y)
 {
 	int prev_wp = -1;
 
@@ -154,7 +162,8 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 	int wp2 = (prev_wp+1)%maps_x.size();
 
-	double heading = atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
+	double heading =
+  atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
 	// the x,y,s along the segment
 	double seg_s = (s-maps_s[prev_wp]);
 
@@ -193,7 +202,7 @@ int main() {
   // Waypoint map to read from
   string map_file_ = "../data/highway_map.csv";
   // The max s value before wrapping around the track back to 0
-  double max_s = 6945.554;
+  //double max_s = 6945.554;
 
   ifstream in_map_(map_file_.c_str(), ifstream::in);
 
@@ -217,8 +226,10 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-                     uWS::OpCode opCode) {
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
+               &map_waypoints_dx,&map_waypoints_dy]
+              (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+               uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -241,16 +252,16 @@ int main() {
           double car_x = j[1]["x"];
           double car_y = j[1]["y"];
           double car_s = j[1]["s"];
-          double car_d = j[1]["d"];
+          //double car_d = j[1]["d"];
           double car_yaw = j[1]["yaw"];
-          double car_speed = j[1]["speed"];
+          //double car_speed = j[1]["speed"];
 
           // Previous path data given to the Planner
           auto previous_path_x = j[1]["previous_path_x"];
           auto previous_path_y = j[1]["previous_path_y"];
           // Previous path's end s and d values
           double end_path_s = j[1]["end_path_s"];
-          double end_path_d = j[1]["end_path_d"];
+          //double end_path_d = j[1]["end_path_d"];
 
           // Sensor Fusion Data, a list of all other cars on the same side of
           // the road.
@@ -289,37 +300,35 @@ int main() {
             if (in_lane(lane, d)) {
               // other car is in our lane
               if (check_car_s > car_s // other car is ahead of us
-                  && check_car_s - car_s < 25) { // and in front safety zone
+                  && check_car_s - car_s < s_safety_zone) { // in safety zone
                 double s_diff = check_car_s - car_s;
                 too_close_front = true;
                 // vary braking according to distance to other vehicle
-                extra_brake = 0.224 * (1 - s_diff / 25);
+                extra_brake = delta_vel * (1 - s_diff / s_safety_zone);
               }
               if (check_car_s < car_s // other car is behind us
-                  && car_s - check_car_s < 25) { // and in rear safety zone
+                  && car_s - check_car_s < s_safety_zone) { // in safety zone
                 double s_diff = car_s - check_car_s;
                 too_close_rear = true;
                 // vary acceleration according to distance to other vehicle
-                extra_accel = 0.224 * (1 - s_diff / 25);
+                extra_accel = delta_vel * (1 - s_diff / s_safety_zone);
               }
             }
             else if (lane > 0 && in_lane(lane - 1, d)) {
-              // other car is on our left
-              if (check_car_s > car_s - 25 // ahead of rear safety zone
-                  && check_car_s < car_s + 25) { // and behind front safety zone
+              // other car is on our left and between front/rear safety zones
+              if (check_car_s > car_s - s_safety_zone
+                  && check_car_s < car_s + s_safety_zone) {
               blocked_left = true;
               }
             }
-            else if (lane < 2 && in_lane(lane + 1, d)) {
-              // other car is on our right
-              if (check_car_s > car_s - 25 // ahead of rear safety zone
-                  && check_car_s < car_s + 25) { // and behind front safety zone
+            else if (lane < max_lane && in_lane(lane + 1, d)) {
+              // other car is on our right and between front/rear safety zones
+              if (check_car_s > car_s - s_safety_zone
+                  && check_car_s < car_s + s_safety_zone) {
                 blocked_right = true;
               }
             }
-            // Instead, we could check that no car is within the gap
-            // to our left; if so, we could check on the right.
-            // This can also incorporate the finite state machine to
+            // This can also incorporate a finite state machine to
             // decide which states are valid given our current state.
           }
 
@@ -327,18 +336,18 @@ int main() {
             if (lane > 0 && !blocked_left) {
               lane -= 1;
             }
-            else if (lane < 2 && !blocked_right) {
+            else if (lane < max_lane && !blocked_right) {
               lane += 1;
             }
             else {
-              ref_vel -= (0.224 + extra_brake);
+              ref_vel -= (delta_vel + extra_brake);
             }
           }
-          else if (too_close_rear && ref_vel < 49.5) {
-            ref_vel += (0.224 + extra_accel);
+          else if (too_close_rear && ref_vel < target_vel) {
+            ref_vel += (delta_vel + extra_accel);
           }
-          else if (ref_vel < 49.5) { // gradually speed up to driving speed
-            ref_vel += 0.224;
+          else if (ref_vel < target_vel) { // gradually reach driving speed
+            ref_vel += delta_vel;
           }
 
           // Create a list of widely-spaced waypoints (x, y), evenly spaced
@@ -385,12 +394,19 @@ int main() {
 
           }
 
-          // In Frenet, add evenly 30m spaced points ahead of starting reference
-          // If lane has changed, this will create a smooth path for the lane change
+          // In Frenet, add evenly 30m spaced points ahead of starting
+          // reference. If lane has changed, this will create a smooth path for
+          // the lane change.
           double d_lane = d_from_lane(lane);
-          vector<double> next_wp0 = getXY(car_s + 30, d_lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-          vector<double> next_wp1 = getXY(car_s + 60, d_lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-          vector<double> next_wp2 = getXY(car_s + 90, d_lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          vector<double> next_wp0 =
+          getXY(car_s + 30, d_lane, map_waypoints_s, map_waypoints_x,
+                map_waypoints_y);
+          vector<double> next_wp1 =
+          getXY(car_s + 60, d_lane, map_waypoints_s, map_waypoints_x,
+                map_waypoints_y);
+          vector<double> next_wp2 =
+          getXY(car_s + 90, d_lane, map_waypoints_s, map_waypoints_x,
+                map_waypoints_y);
 
           // In addition to the previous two, add three more points
           ptsx.push_back(next_wp0[0]);
@@ -413,7 +429,7 @@ int main() {
           // Create the spline containing the waypoints for the car's path
           tk::spline s;
 
-          // Set x, y points t the spline
+          // Set x, y points to the spline
           s.set_points(ptsx, ptsy);
 
           // Define the actual x, y points we will use for the planner
