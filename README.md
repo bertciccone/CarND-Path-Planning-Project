@@ -30,7 +30,7 @@ Highway incidents in this simulation include:
 - Collision with another car
 - Excessive jerk in forward or lateral direction
 
-In the final run of the project as captured in the ![project video](./video/xxxxxxxxxxx), the car drives over 5 minutes without incident.
+In the final run of the project, the car drives over 5 minutes without incident.
 
 ### The car drives according to the speed limit.
 
@@ -110,9 +110,3 @@ The car's path is extended to a length of 50 steps every 0.02 seconds and is cre
 - Use Spline polynomial interpolation to create a smooth line intersecting all of the waypoints. This calculation is performed by the function in spline.h.
 
 - The function in spline.h is used to calculate points along the line separated by the distance traveled by the vehicle in 0.02 seconds at the desired velocity.
-
-### Project Video
-
-Download the following video to see a 5-minute run of the Udacity/Unity Term 3 Simulator running with the project path planner code.
-
-![Project Video](./video/xxxxxxxxxxx)
